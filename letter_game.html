@@ -1,0 +1,386 @@
+<!doctype html>
+<html>
+<head>
+<style>
+    #barDiv {
+        display: flex
+    }
+    #barDiv > *{
+        flex:1
+    }
+    #myLogo {
+        flex:1.5
+    }
+</style>
+<script>
+// Globol variables
+var lettersArray = [];
+var fallingLeters = [];
+var explosionArray = [];
+var explosionTimerIndex = 0
+var explosionObjectIndex = 1
+var explosionCounterIndex = 2
+var explosionLetterIndex = 3
+var hault = false
+var base = parseInt(screen.width/27)
+var baseLine = 0;
+var barHeight = 100
+var movement = 10
+var selectSpped = 1000
+var fallingSpeed = 450
+var selectTimerID
+var fallingTimerID
+var level = 1
+var hit = 0
+
+// Remove Level-up picture
+function disappearFlashImg(img, flash) {
+    if (flash > 0) {
+        if (img.style.visibility == "hidden") {
+            img.style.visibility = "visible"
+        } else {
+            img.style.visibility = "hidden"
+        }
+        setTimeout(function() {disappearFlashImg(img, flash-1)}, 50)
+    } else {
+        if(img.id == "deathImg") {
+            var locationPixal = parseInt(screen.width/4) + "px"
+            var defeatImg = createHtmlElement("img", "defeatImg", locationPixal, barHeight + "px", "45%", "")
+            defeatImg.src                 = "images/defeat.jpg"
+            defeatImg.style.position      = "absolute"
+            document.body.appendChild(defeatImg)
+        } else {
+            document.body.removeChild(img);
+        }
+    }
+}
+// Show level up information
+function showLevelUp() {
+    var levelUpImg  = createHtmlElement("img", "levelUpImg", "500px", "150px", "300px", "")
+    levelUpImg.src                 = "images/level_up.png"
+    levelUpImg.style.position      = "absolute"
+    document.body.appendChild(levelUpImg);
+    setTimeout(function() {disappearFlashImg(levelUpImg, 10)}, 50)
+}
+// Check whether it should level up
+function checkLevel() {
+    hit ++
+    document.getElementById('myScores').childNodes[0].nodeValue = "Scores: " + hit
+    var levelChange = false
+    switch(hit%3) {
+        case 2:
+            selectSpped *= 0.9 
+            fallingSpeed *= 0.9 
+            levelChange = true
+            level++
+            break;
+    }
+    if(levelChange) {
+        document.getElementById("myLevel").childNodes[0].nodeValue = "Level: " + level
+        clearInterval(selectTimerID)
+        clearInterval(fallingTimerID)
+        selectTimerID = setInterval("selectNewLetter()", selectSpped)
+        fallingTimerID = setInterval("runFalling()", fallingSpeed)
+        showLevelUp()
+    }
+}
+// Reset the letter which was shot
+function resetExplosedLetter(letter) {
+    letter.style.top            = baseLine + "px"
+    letter.style.bottom         = baseLine + base + "px"
+    letter.className            = "unselected"
+    letter.style.visibility     = "hidden"
+}
+// Animation
+function changeExplosionSrc(boomImg) {
+    var explostionInfo;
+    for(let i=0; i<explosionArray.length; i++) {
+        if (explosionArray[i][explosionObjectIndex] === boomImg) {
+            explostionInfo = explosionArray[i]
+            break;
+        }
+    }
+
+    if( explostionInfo != null) {
+        var explosionCounter = explostionInfo[explosionCounterIndex]
+        if (explosionCounter < 17) {
+            boomImg.src = "images/explosion/explosion" + explosionCounter + ".png"
+            explostionInfo[explosionCounterIndex] ++
+        } else {
+            document.body.removeChild(boomImg)
+            resetExplosedLetter(explostionInfo[explosionLetterIndex])
+            clearInterval(explostionInfo[explosionTimerIndex])
+            var index = explosionArray.indexOf(explostionInfo)
+            if (index > -1) {
+                explosionArray.splice(index, 1)
+            }
+        }
+    }
+}
+// Create exploision picture and maintain it into array
+function createExplosion(letter) {
+    var explosionCounter = 2;
+    var explosionImg = createHtmlElement("img", ("explosionImg" + explosionCounter), 
+            letter.style.left, letter.style.top, (base + 10 + "px"), (base + 10 + "px"))
+    explosionImg.src                 = "images/explosion/explosion" + explosionCounter + ".png"
+    explosionImg.style.position      = "absolute"
+    explosionImg.style.right         = parseInt(letter.style.right+10) + "px"
+    explosionImg.style.bottom        = parseInt(letter.style.bottom+10) + "px"
+    document.body.appendChild(explosionImg)
+
+    // Create timer
+    var explosionTimerID = setInterval(function() { changeExplosionSrc(explosionImg); }, 80)
+    
+    // Maintain explostion information
+    var explosionInfo = [];
+    explosionInfo.push(explosionTimerID)
+    explosionInfo.push(explosionImg)
+    explosionInfo.push(explosionCounter)
+    explosionInfo.push(letter)
+    explosionArray.push(explosionInfo)
+}
+// remove one heart picture
+function takeOfOneLife() {
+    var heartDiv = document.getElementById('heartDiv')
+    switch(heartDiv.childNodes.length) {
+        case 3:
+            heartDiv.removeChild(heartDiv.childNodes[2])
+            break;
+        case 2:
+            heartDiv.removeChild(heartDiv.childNodes[1])
+            break;
+        case 1:
+            heartDiv.removeChild(heartDiv.childNodes[0])
+            endGame()
+            break;
+    }
+}
+// shot the wrong letters...
+function decrease() {
+    var deductionImg = createHtmlElement("img", "deductionImg" , 
+            "620px", "30px", (base + "px"), "50px")
+    deductionImg.src                 = "images/deduction.png"
+    deductionImg.style.position      = "absolute"
+    document.body.appendChild(deductionImg)
+    setTimeout(function() {disappearFlashImg(deductionImg, 10)}, 50)
+    takeOfOneLife()
+}
+// Shot the letter with keyboard event
+function shotThisLetter(object) {
+    if (object.className != "falling") {
+        decrease()
+        return;
+    }
+    // Remove from the falling array
+    var index = fallingLeters.indexOf(object);
+    if (index > -1) {
+        fallingLeters.splice(index, 1);
+    }
+    // Hidden the letter first
+    object.style.visibility = "hidden";
+    
+    // Display exlopsion animation
+    createExplosion(object)
+    
+    // level
+    checkLevel()
+}
+// use 'esc' to control our app
+function switchOnorOff() {
+    if (hault) {
+        selectTimerID = setInterval("selectNewLetter()", selectSpped)
+        fallingTimerID = setInterval("runFalling()", fallingSpeed)
+    } else {
+        clearInterval(selectTimerID)
+        clearInterval(fallingTimerID)
+    }
+    hault = !hault;
+}
+// Keyboard events
+function determinekey(e){
+    var keyCode = null
+    if(e.event) {
+        keyCode = e.event
+    } else if (e.which) {
+        keyCode = e.which
+    }
+    
+    if (keyCode === 27) {
+        // Esc
+        switchOnorOff()
+        return
+    } else if (keyCode === 38) {
+        // Up
+        checkLevel()
+        return
+    }
+    
+	keyCode += 32
+    // make sure that the user input is letter, 97 - 122
+    if(keyCode >= 97 && keyCode <= 122) {
+        var letter = String.fromCharCode(keyCode)
+        console.log(letter);
+        shotThisLetter(document.getElementById(letter))
+    }
+}
+// Reset the timer
+function resetTimer() {
+    clearInterval(selectTimerID)
+    clearInterval(fallingTimerID)
+}
+// End game
+function endGame() {
+    resetTimer()
+    var heartDiv = document.getElementById('heartDiv')
+    var deathImg = createHtmlElement("img", "deathImg", "", "", "50px", "80px")
+    deathImg.src = "images/death.png"
+    deathImg.style.marginTop     = "10px"
+    heartDiv.append(deathImg)
+    setTimeout(function() {disappearFlashImg(deathImg, 10)}, 50)
+}
+// Second timer: go through the falling array and make them falling
+function runFalling() {
+    for (let i=0; i < fallingLeters.length; i++) {
+        var  selectedLetter = fallingLeters[i]
+        if ((parseInt(selectedLetter.style.bottom) + movement) > screen.height) {
+            selectedLetter.style.bottom = (screen.height) + "px"
+            selectedLetter.style.top = (screen.height - base) + "px"
+            // have extra lifes 
+            if (document.getElementById('heartDiv').childNodes.length >= 1) {
+                selectedLetter.style.visibility = "hidden"
+                resetExplosedLetter(selectedLetter)
+                decrease() 
+            } else {
+                endGame()
+            }
+        } else {
+            selectedLetter.style.bottom = parseInt(selectedLetter.style.bottom) + movement + "px"
+            selectedLetter.style.top = parseInt(selectedLetter.style.top) + movement + "px"
+        }   
+        if (parseInt(selectedLetter.style.top) > barHeight ) {
+            selectedLetter.style.visibility     = "visible"
+        }
+    }
+}
+// First timer: Randomly selct a letter
+function selectNewLetter() {
+    // First, check whether the randomly selected letter is not falling
+    var selectedLetter
+    do {
+        var selectedLetterID = eval("String.fromCharCode(" + parseInt((Math.random()*100)%26+97) + ")")
+        selectedLetter = document.getElementById(selectedLetterID); 
+    } while(selectedLetter.className != "unselected")
+    // Add the selected letters to the falling array
+    selectedLetter.className = "falling"
+    fallingLeters.push(selectedLetter)
+}
+// For dubugging
+function showInfo() {
+    alert("left( " + this.style.left + ") right( " + this.style.right 
+            + ") top(" + this.style.top + ") bottom(" + this.style.bottom + ")")
+}
+// Initailize
+function setupBar() {
+    var barDiv                  = createHtmlElement("div", "barDiv", "0px", "0px", "100%", barHeight+"px")
+    // First
+    var myLogo                   = createHtmlElement("img", "myLogo", "0px", "0px", "100%", barHeight+"px")
+    myLogo.src                   = "images/logo.jpg"
+    barDiv.appendChild(myLogo)
+    // Second
+    var heartDiv                  = document.createElement("div")
+    heartDiv.id                   = 'heartDiv'        
+    for (let i=1; i<=3; i++) {
+        var myLifes                 = createHtmlElement("img", ("heart"+i), "0px", "0px", "50px", "80px")
+        myLifes.src                 = "images/heart.png"
+        myLifes.style.marginTop     = "10px"
+        heartDiv.appendChild(myLifes)
+        barDiv.appendChild(heartDiv)
+    }
+    // Third
+    var levelDiv                 = createHtmlElement("div", "levelDiv", "0px", "0px", "100%", barHeight+"px")
+    var myLevel                  = createHtmlElement("h1", "myLevel", "0px", "0px", "100%", barHeight+"px")
+    var myLevelTextNode          = document.createTextNode("Level: " + level)
+    myLevel.appendChild(myLevelTextNode)
+    levelDiv.appendChild(myLevel)
+    barDiv.appendChild(levelDiv)
+    // Forth
+    var scorceDiv                 = createHtmlElement("div", "scorceDiv", "0px", "0px", "100%", barHeight+"px")
+    var myScores                  = createHtmlElement("h1", "myScores", "0px", "0px", "100%", barHeight+"px")
+    var myScoresTextNode        = document.createTextNode("Score: 0")
+    myScores.appendChild(myScoresTextNode)
+    scorceDiv.appendChild(myScores)
+    barDiv.appendChild(myScores)
+    document.body.appendChild(barDiv)
+}
+function setupLeters() {
+    // Main div
+    var jungleDiv = createHtmlElement("div", "jungleDiv", "0px", barHeight + "px", "100%", (screen.height-barHeight)+"px")
+    jungleDiv.style.backgroundImage = "url('images/bg.jpg')";
+    jungleDiv.style.backgroundSize = "cover";
+
+    // 97 - 122
+    var first = "a"
+	var last  = "z"
+	for (let i = first.charCodeAt(0); i <= last.charCodeAt(0); i++) {
+		letter                  = eval("String.fromCharCode(" + i + ")")
+        var img                 = createHtmlElement("img", letter, (i-97)*base + 1/2*base +"px", 
+                                        baseLine + "px", base+ "px", base+ "px")
+        img.src                 = "images/letters/" + letter + ".png"
+        img.style.bottom        = baseLine + base + "px"
+        img.style.position      = "absolute"
+        img.className           = "unselected"
+        img.style.visibility    = "hidden"
+        jungleDiv.appendChild(img);
+        lettersArray.push(img);
+	}
+    document.body.appendChild(jungleDiv)
+}
+// Remove the two elements which belong to greeting screen
+function removeGreetingScreen(object) {
+    document.body.removeChild(object)
+    document.body.removeChild(document.getElementById("greetingTitle"))
+}
+// Start
+function start() {
+    removeGreetingScreen(this)
+    setupBar()
+    setupLeters()
+    selectTimerID = setInterval("selectNewLetter()", selectSpped)
+    fallingTimerID = setInterval("runFalling()", fallingSpeed)
+    onkeyup = determinekey
+}
+// For creating html element
+function createHtmlElement(type, id, left, top, width, height) {
+    var element = document.createElement(type)
+    element.id                   = id
+    element.style.left           = left
+    element.style.top            = top
+    element.style.width          = width
+    element.style.height         = height
+    element.onclick              = showInfo
+    return element
+}
+// Show the greeting screen
+function init() {
+    var locationPixal = parseInt(screen.width/3) + "px"
+    // Greeting Title
+    var greetingTitle                   = createHtmlElement("img", "greetingTitle", locationPixal, "50px", locationPixal, "")
+    greetingTitle.src                   = "images/letterCrush.png"
+    greetingTitle.style.position        = "absolute"
+    document.body.appendChild(greetingTitle)
+    // Greeting Img
+    var greetingImg                     = createHtmlElement("img", "greetingImg", locationPixal, "200px", locationPixal, "")
+    greetingImg.src                     = "images/press_start.jpg"
+    greetingImg.style.position          = "absolute"
+    greetingImg.onclick                 = start
+    document.body.appendChild(greetingImg)
+}
+// Ready
+onload = function(){
+    init()
+}
+</script>
+</head>
+<body>
+</body>
+</html>
