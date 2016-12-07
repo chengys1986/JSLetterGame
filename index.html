@@ -15,15 +15,16 @@
 <script>
 // Globol variables
 var lettersArray = [];
-var fallingLeters = [];
+var animalsArray = [];
+var fallingElements = [];
 var explosionArray = [];
 var explosionTimerIndex = 0
 var explosionObjectIndex = 1
 var explosionCounterIndex = 2
 var explosionLetterIndex = 3
 var hault = false
-var base = parseInt(screen.width/27)
-var baseLine = 0;
+var base = parseInt(screen.width/14)
+var baseLine = 100;
 var barHeight = 100
 var movement = 10
 var selectSpped = 1000
@@ -44,9 +45,9 @@ function disappearFlashImg(img, flash) {
         setTimeout(function() {disappearFlashImg(img, flash-1)}, 50)
     } else {
         if(img.id == "deathImg") {
-            var locationPixal = parseInt(screen.width/4) + "px"
-            var defeatImg = createHtmlElement("img", "defeatImg", locationPixal, barHeight + "px", "45%", "")
-            defeatImg.src                 = "images/defeat.jpg"
+            var locationPixal = parseInt(screen.width/3) + "px"
+            var defeatImg = createHtmlElement("img", "defeatImg", locationPixal, barHeight+100 + "px", "45%", "")
+            defeatImg.src                 = "images/defeat.png"
             defeatImg.style.position      = "absolute"
             document.body.appendChild(defeatImg)
         } else {
@@ -69,8 +70,8 @@ function checkLevel() {
     var levelChange = false
     switch(hit%3) {
         case 2:
-            selectSpped *= 0.9 
-            fallingSpeed *= 0.9 
+            selectSpped *= 0.95 
+            fallingSpeed *= 0.99 
             levelChange = true
             level++
             break;
@@ -79,13 +80,15 @@ function checkLevel() {
         document.getElementById("myLevel").childNodes[0].nodeValue = "Level: " + level
         clearInterval(selectTimerID)
         clearInterval(fallingTimerID)
-        selectTimerID = setInterval("selectNewLetter()", selectSpped)
+        selectTimerID = setInterval("selectNewElement()", selectSpped)
         fallingTimerID = setInterval("runFalling()", fallingSpeed)
         showLevelUp()
     }
 }
 // Reset the letter which was shot
 function resetExplosedLetter(letter) {
+    var randomLocation          = createLocation()
+    letter.style.left           = randomLocation +"px"
     letter.style.top            = baseLine + "px"
     letter.style.bottom         = baseLine + base + "px"
     letter.className            = "unselected"
@@ -167,14 +170,10 @@ function decrease() {
 }
 // Shot the letter with keyboard event
 function shotThisLetter(object) {
-    if (object.className != "falling") {
-        decrease()
-        return;
-    }
     // Remove from the falling array
-    var index = fallingLeters.indexOf(object);
+    var index = fallingElements.indexOf(object);
     if (index > -1) {
-        fallingLeters.splice(index, 1);
+        fallingElements.splice(index, 1);
     }
     // Hidden the letter first
     object.style.visibility = "hidden";
@@ -188,7 +187,7 @@ function shotThisLetter(object) {
 // use 'esc' to control our app
 function switchOnorOff() {
     if (hault) {
-        selectTimerID = setInterval("selectNewLetter()", selectSpped)
+        selectTimerID = setInterval("selectNewElement()", selectSpped)
         fallingTimerID = setInterval("runFalling()", fallingSpeed)
     } else {
         clearInterval(selectTimerID)
@@ -209,6 +208,8 @@ function determinekey(e){
         // Esc
         switchOnorOff()
         return
+    } else if (hault) {
+        return
     } else if (keyCode === 38) {
         // Up
         checkLevel()
@@ -219,8 +220,17 @@ function determinekey(e){
     // make sure that the user input is letter, 97 - 122
     if(keyCode >= 97 && keyCode <= 122) {
         var letter = String.fromCharCode(keyCode)
-        console.log(letter);
-        shotThisLetter(document.getElementById(letter))
+        //console.log(letter);
+        var elements
+        if ( level >= 5 && document.getElementById("animal_" + letter).className == "falling") {
+            elements = document.getElementById("animal_" + letter)
+        } else if (document.getElementById(letter).className == "falling") {
+            elements = document.getElementById(letter)
+        } else {
+            decrease()
+            return;
+        }
+        shotThisLetter(elements)
     }
 }
 // Reset the timer
@@ -228,20 +238,38 @@ function resetTimer() {
     clearInterval(selectTimerID)
     clearInterval(fallingTimerID)
 }
+function bigBang(countOfBoom) {
+    if (countOfBoom > 0) {
+        for(let i=0; i<lettersArray.length; i++) {
+            if (lettersArray[i].className == "falling") {
+                createExplosion(lettersArray[i])
+            }
+        }
+        for(let i=0;i<animalsArray.length;i++) {
+            if (animalsArray[i].className == "falling") {
+                createExplosion(animalsArray[i])
+            }
+        }
+        setTimeout(function() {bigBang(countOfBoom-1)}, 50)
+    } else {
+        var heartDiv = document.getElementById('heartDiv')
+        var deathImg = createHtmlElement("img", "deathImg", "", "", "50px", "80px")
+        deathImg.src = "images/death.png"
+        deathImg.style.marginTop     = "10px"
+        heartDiv.append(deathImg)
+        setTimeout(function() {disappearFlashImg(deathImg, 10)}, 500)
+    }
+}
 // End game
 function endGame() {
+    hault = true
     resetTimer()
-    var heartDiv = document.getElementById('heartDiv')
-    var deathImg = createHtmlElement("img", "deathImg", "", "", "50px", "80px")
-    deathImg.src = "images/death.png"
-    deathImg.style.marginTop     = "10px"
-    heartDiv.append(deathImg)
-    setTimeout(function() {disappearFlashImg(deathImg, 10)}, 50)
+    setTimeout(function() {bigBang(10)}, 20)
 }
 // Second timer: go through the falling array and make them falling
 function runFalling() {
-    for (let i=0; i < fallingLeters.length; i++) {
-        var  selectedLetter = fallingLeters[i]
+    for (let i=0; i < fallingElements.length; i++) {
+        var  selectedLetter = fallingElements[i]
         if ((parseInt(selectedLetter.style.bottom) + movement) > screen.height) {
             selectedLetter.style.bottom = (screen.height) + "px"
             selectedLetter.style.top = (screen.height - base) + "px"
@@ -263,16 +291,21 @@ function runFalling() {
     }
 }
 // First timer: Randomly selct a letter
-function selectNewLetter() {
+function selectNewElement() {
     // First, check whether the randomly selected letter is not falling
-    var selectedLetter
+    var selectedElement
     do {
-        var selectedLetterID = eval("String.fromCharCode(" + parseInt((Math.random()*100)%26+97) + ")")
-        selectedLetter = document.getElementById(selectedLetterID); 
-    } while(selectedLetter.className != "unselected")
+        var selectedIndex = parseInt((Math.random()*100)%26)
+        if (level >= 5 && lettersArray[selectedIndex].className == "unselected") {
+            selectedElement = animalsArray[selectedIndex]
+        } else {
+            selectedElement = lettersArray[selectedIndex]
+        }
+        
+    } while(selectedElement.className != "unselected")
     // Add the selected letters to the falling array
-    selectedLetter.className = "falling"
-    fallingLeters.push(selectedLetter)
+    selectedElement.className = "falling"
+    fallingElements.push(selectedElement)
 }
 // For dubugging
 function showInfo() {
@@ -297,20 +330,23 @@ function setupBar() {
         barDiv.appendChild(heartDiv)
     }
     // Third
-    var levelDiv                 = createHtmlElement("div", "levelDiv", "0px", "0px", "100%", barHeight+"px")
-    var myLevel                  = createHtmlElement("h1", "myLevel", "0px", "0px", "100%", barHeight+"px")
-    var myLevelTextNode          = document.createTextNode("Level: " + level)
+    var levelDiv                    = createHtmlElement("div", "levelDiv", "0px", "0px", "100%", barHeight+"px")
+    var myLevel                     = createHtmlElement("h1", "myLevel", "0px", "0px", "100%", barHeight+"px")
+    var myLevelTextNode             = document.createTextNode("Level: " + level)
     myLevel.appendChild(myLevelTextNode)
     levelDiv.appendChild(myLevel)
     barDiv.appendChild(levelDiv)
     // Forth
-    var scorceDiv                 = createHtmlElement("div", "scorceDiv", "0px", "0px", "100%", barHeight+"px")
-    var myScores                  = createHtmlElement("h1", "myScores", "0px", "0px", "100%", barHeight+"px")
-    var myScoresTextNode        = document.createTextNode("Score: 0")
+    var scorceDiv                   = createHtmlElement("div", "scorceDiv", "0px", "0px", "100%", barHeight+"px")
+    var myScores                    = createHtmlElement("h1", "myScores", "0px", "0px", "100%", barHeight+"px")
+    var myScoresTextNode            = document.createTextNode("Score: 0")
     myScores.appendChild(myScoresTextNode)
     scorceDiv.appendChild(myScores)
     barDiv.appendChild(myScores)
     document.body.appendChild(barDiv)
+}
+function createLocation( ) {
+    return ((parseInt((Math.random()*100)%13)) * base )
 }
 function setupLeters() {
     // Main div
@@ -323,7 +359,9 @@ function setupLeters() {
 	var last  = "z"
 	for (let i = first.charCodeAt(0); i <= last.charCodeAt(0); i++) {
 		letter                  = eval("String.fromCharCode(" + i + ")")
-        var img                 = createHtmlElement("img", letter, (i-97)*base + 1/2*base +"px", 
+        var randomLocation      = createLocation()
+        // Letters
+        var img                 = createHtmlElement("img", letter, randomLocation +"px", 
                                         baseLine + "px", base+ "px", base+ "px")
         img.src                 = "images/letters/" + letter + ".png"
         img.style.bottom        = baseLine + base + "px"
@@ -332,6 +370,18 @@ function setupLeters() {
         img.style.visibility    = "hidden"
         jungleDiv.appendChild(img);
         lettersArray.push(img);
+        
+        // Animals
+        var randomLocation      = createLocation()
+        var animalImg                 = createHtmlElement("img", "animal_" + letter, randomLocation +"px", 
+                                        baseLine + "px", base+ "px", base+ "px")
+        animalImg.src                 = "images/animals/animal_" + letter + ".png"
+        animalImg.style.bottom        = baseLine + base + "px"
+        animalImg.style.position      = "absolute"
+        animalImg.className           = "unselected"
+        animalImg.style.visibility    = "hidden"
+        jungleDiv.appendChild(animalImg);
+        animalsArray.push(animalImg);        
 	}
     document.body.appendChild(jungleDiv)
 }
@@ -345,7 +395,7 @@ function start() {
     removeGreetingScreen(this)
     setupBar()
     setupLeters()
-    selectTimerID = setInterval("selectNewLetter()", selectSpped)
+    selectTimerID = setInterval("selectNewElement()", selectSpped)
     fallingTimerID = setInterval("runFalling()", fallingSpeed)
     onkeyup = determinekey
 }
@@ -357,7 +407,7 @@ function createHtmlElement(type, id, left, top, width, height) {
     element.style.top            = top
     element.style.width          = width
     element.style.height         = height
-    element.onclick              = showInfo
+    //element.onclick              = showInfo
     return element
 }
 // Show the greeting screen
